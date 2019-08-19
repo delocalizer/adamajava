@@ -42,30 +42,36 @@ public class HomoplymersMode extends AbstractMode{
 	private int reportWindow;
 	public static final int defaultWindow = 100;
 	public static final int defaultreport = 10;
+	private final boolean isStringent;
 	
-	@Deprecated //for unit test
-	HomoplymersMode( int homoWindow, int reportWindow){		
-		this.input = null;
-		this.output = null;
+	//for unit test
+	HomoplymersMode( String input, int homoWindow, int reportWindow, boolean isStrict) throws IOException{		
+		this.input = input;
+		this.output = input == null? null : input + ".out.vcf";
 		this.dbfile = null;
 		this.homopolymerWindow = homoWindow;
 		this.reportWindow = reportWindow;
+		this.isStringent = isStrict;
+		
+		if(input != null) {
+			reheader("cmd",input);
+		}
 	}
 		
 	public HomoplymersMode(Options options) throws IOException {
 		input = options.getInputFileName();
 		output = options.getOutputFileName();
 		dbfile = options.getDatabaseFileName();
+		this.isStringent = options.isStringentChrName();
 		homopolymerWindow =  options.getHomoplymersWindow();
 		reportWindow = options.getHomoplymersReportSize();
 		reportWindow = options.getHomoplymersReportSize();
 		logger.tool("input: " + options.getInputFileName());
         logger.tool("reference file: " + dbfile);
         logger.tool("output for annotated vcf records: " + options.getOutputFileName());
-        logger.tool("logger file " + options.getLogFileName());
-        logger.tool("logger level " + (options.getLogLevel() == null ? QLoggerFactory.DEFAULT_LEVEL.getName() :  options.getLogLevel()));
         logger.tool("window size for homoplymers: " + homopolymerWindow);
         logger.tool("number of homoplymer bases on either side of variant to report: " + reportWindow);
+        logger.tool("accept ambiguous chromosome name, eg. treat M and chrMT as same chromosome name: " + (!isStringent));
         
         reheader(options.getCommandLine(),options.getInputFileName());
  		addAnnotation(dbfile);		
@@ -76,11 +82,13 @@ public class HomoplymersMode extends AbstractMode{
 	 * https://github.com/samtools/htsjdk/blob/master/src/main/java/htsjdk/samtools/reference/AbstractFastaSequenceFile.java
 	 */
 	protected static Path findSequenceDictionary(final Path path) {
+
         if (path == null) {
             return null;
         }
         // Try and locate the dictionary with the default method
-        final Path dictionary = ReferenceSequenceFileFactory.getDefaultDictionaryForReferenceSequence(path); path.toAbsolutePath();
+        final Path dictionary = ReferenceSequenceFileFactory.getDefaultDictionaryForReferenceSequence(path); 
+        path.toAbsolutePath();
         if (Files.exists(dictionary)) {
             return dictionary;
         }
@@ -106,8 +114,9 @@ public class HomoplymersMode extends AbstractMode{
 		    }
 		    
 		    int sum = 0;
-			for (final VcfRecord re : reader) {	
-				writer.add( annotate(re, referenceBase.get(IndelUtils.getFullChromosome(re.getChromosome()))));
+			for (final VcfRecord re : reader) {					 
+				String contig = isStringent? re.getChromosome(): getFullChromosome(re.getChromosome());			
+				writer.add( annotate(re, referenceBase.get( contig ) ));
 				sum ++;
 			}
 			logger.info(sum + " records have been put through qannotate's homopolymer mode");
@@ -291,14 +300,14 @@ public class HomoplymersMode extends AbstractMode{
 		return max == 1 ? 0 : max;
 	}
 	
-   static Map<String, byte[]> getReferenceBase(File reference) throws IOException {
+    Map<String, byte[]> getReferenceBase(File reference) throws IOException {
 	   
 	   /*
         * check to see if the index and dict file exist for the reference
         */
        Path dictPath = findSequenceDictionary(reference.toPath());
        if (null == dictPath) {
-       	throw new IllegalArgumentException("No dict file found for reference file: " + reference);
+    	   throw new IllegalArgumentException("No dict file found for reference file: " + reference);
        }
        logger.tool("reference dictionary file: " + dictPath.toString());
        Path indexPath = ReferenceSequenceFileFactory.getFastaIndexFileName(reference.toPath());
@@ -314,8 +323,9 @@ public class HomoplymersMode extends AbstractMode{
 	   try (IndexedFastaSequenceFile indexedFasta = new IndexedFastaSequenceFile(reference, index);) {
 		   SAMSequenceDictionary dict = indexedFasta.getSequenceDictionary();
 		   for (SAMSequenceRecord re: dict.getSequences()) {
-			   String contig = IndelUtils.getFullChromosome(re.getSequenceName());
-			   referenceBase.put(contig, indexedFasta.getSequence(contig).getBases());
+			   //here we store reference base to map, convert contig name if requires
+			   String contig = isStringent? re.getSequenceName(): getFullChromosome(re.getSequenceName());			  
+			   referenceBase.put(contig, indexedFasta.getSequence( re.getSequenceName()).getBases());
 		   }
 	   }
 	   return referenceBase;
