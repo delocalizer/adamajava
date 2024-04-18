@@ -587,7 +587,7 @@ public class BamSummaryReport extends SummaryReport {
 		//ZM - not for torrent bams
 		if ( ! torrentBam) {	
 			value = (String) record.getAttribute(ZM);
-			if (null != value) {
+			if (StringUtils.isNumeric(value)) {
 				tagZMLineLengths.increment(Integer.parseInt(value));
 				if (includeMatrices) {
 					zm = Integer.valueOf(Integer.parseInt(value));

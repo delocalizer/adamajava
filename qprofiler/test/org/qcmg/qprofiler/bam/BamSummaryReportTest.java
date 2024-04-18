@@ -111,6 +111,14 @@ public class BamSummaryReportTest {
 		assertEquals(25, map.get(1).get());
 	}
 	
+	@Test
+	public void testParseTAGsOnNonIntegerZM() throws Exception{
+		// https://github.com/AdamaJava/adamajava/issues/353
+		BamSummaryReport bsr = new BamSummaryReport(null, -1, null, null, null);
+		SAMRecord record = new SAMRecord(new SAMFileHeader());
+		record.setAttribute("ZM", "MantaBND:0:18770:18780:0:1:0:0|SRM");
+		bsr.parseRecord(record);
+	}
 	
 	@Test
 	public void testGenerateMAPQSubMaps() throws Exception{
